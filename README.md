@@ -15,7 +15,7 @@
 
 ## Descrição do Projeto
 
-O **OpenSky CDC DataLake** é um projeto de estudo voltado para a captura e replicação de dados de tráfego aéreo em tempo real. Utilizando **Change Data Capture (CDC)**, o objetivo é armazenar os dados de voos da [OpenSky Network](https://opensky-network.org/data) em um Data Lake para posterior análise e visualização.
+O **OpenSky CDC DataLake** é um projeto de estudo voltado para a captura e replicação de dados de tráfego aéreo em tempo real. Utilizando **Change Data Capture (CDC)**, o objetivo é armazenar os dados de voos da [OpenSky Network](https://opensky-network.org/) em um Data Lake para posterior análise e visualização.
 
 Este projeto será baseado no repositório [fia-vestival-cdc-lake](https://github.com/Labdata-FIA/fia-vestival-cdc-lake) do minicurso **"Hands-on - Replicando Informações em Realtime para o DataLake utilizando CDC"** da FIA Labdata. O desenvolvimento do projeto está previsto para começar em **junho**.
 
