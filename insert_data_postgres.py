@@ -1,51 +1,25 @@
+import os
 import requests
 import psycopg2
+from psycopg2.extras import execute_values
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-def postgres_insert(data):
-    try:
-        conn = psycopg2.connect(
-            host="host",
-            dbname="dbname",
-            user="user",
-            password="password",
-            port="port"
-        )
-        
-        columns = list(data[0].keys())
-        placeholders = ", ".join(["%s"] * len(columns))
-        columns_str = ", ".join(columns)
+# ---------------------------------------------------------------------------
+# Mapeamentos de valores codificados da API OpenSky
+# ---------------------------------------------------------------------------
 
-        query = f"INSERT INTO opensky_api_states_all ({columns_str}) VALUES ({placeholders})"
-
-        values = [tuple(d[col] for col in columns) for d in data]
-
-        cursor = conn.cursor()
-        cursor.executemany(query, values)
-        conn.commit()
-        print("Inserção bem-sucedida!")
-
-    except Exception as e:
-        print(f"Erro ao executar a inserção: {e}")
-        conn.rollback()
-
-    finally:
-        cursor.close()
-        conn.close()
-    
-url = "https://opensky-network.org/api/states/all"
-
-response = requests.get(url)
-
-position_source_map = {
-    0:"ADS-B",
-    1:"ASTERIX",
-    2:"MLAT",
-    3:"FLARM"
+POSITION_SOURCE_MAP = {
+    0: "ADS-B",
+    1: "ASTERIX",
+    2: "MLAT",
+    3: "FLARM"
 }
 
-category_map = {
+CATEGORY_MAP = {
     0: "No information at all",
     1: "No ADS-B Emitter Category Information",
     2: "Light (< 15500 lbs)",
@@ -69,28 +43,143 @@ category_map = {
     20: "Line Obstacle"
 }
 
+# Colunas retornadas pela API OpenSky.
+# A API anônima retorna 17 campos; com autenticação retorna 18 (inclui category).
+OPENSKY_COLUMNS_17 = [
+    "icao24", "callsign", "origin_country", "time_position", "last_contact",
+    "longitude", "latitude", "baro_altitude", "on_ground", "velocity",
+    "true_track", "vertical_rate", "sensors", "geo_altitude", "squawk",
+    "spi", "position_source"
+]
 
-if response.status_code == 200:
+OPENSKY_COLUMNS_18 = OPENSKY_COLUMNS_17 + ["category"]
+
+
+# ---------------------------------------------------------------------------
+# Banco de dados
+# ---------------------------------------------------------------------------
+
+def get_connection():
+    """Retorna uma conexão com o PostgreSQL usando variáveis de ambiente."""
+    return psycopg2.connect(
+        host=os.getenv("POSTGRES_HOST", "localhost"),
+        dbname=os.getenv("POSTGRES_DB", "postgres"),
+        user=os.getenv("POSTGRES_USER", "postgres"),
+        password=os.getenv("POSTGRES_PASSWORD", "postgres"),
+        port=os.getenv("POSTGRES_PORT", "5432")
+    )
+
+
+def create_table_if_not_exists(conn):
+    """Cria a tabela de destino caso ela ainda não exista."""
+    ddl = """
+    CREATE TABLE IF NOT EXISTS opensky_api_states_all (
+        icao24                TEXT,
+        callsign              TEXT,
+        origin_country        TEXT,
+        time_position         DOUBLE PRECISION,
+        last_contact          BIGINT,
+        longitude             DOUBLE PRECISION,
+        latitude              DOUBLE PRECISION,
+        baro_altitude         DOUBLE PRECISION,
+        on_ground             BOOLEAN,
+        velocity              DOUBLE PRECISION,
+        true_track            DOUBLE PRECISION,
+        vertical_rate         DOUBLE PRECISION,
+        sensors               DOUBLE PRECISION,
+        geo_altitude          DOUBLE PRECISION,
+        squawk                DOUBLE PRECISION,
+        spi                   BOOLEAN,
+        position_source       INTEGER,
+        category              DOUBLE PRECISION,
+        position_source_label TEXT,
+        time                  BIGINT
+    );
+    """
+    with conn.cursor() as cur:
+        cur.execute(ddl)
+    conn.commit()
+
+
+def postgres_insert(df):
+    """Insere o DataFrame no PostgreSQL de forma eficiente via execute_values."""
+    conn = None
+    try:
+        conn = get_connection()
+        create_table_if_not_exists(conn)
+
+        cols = list(df.columns)
+        query = f"INSERT INTO opensky_api_states_all ({', '.join(cols)}) VALUES %s"
+        values = [tuple(row) for row in df.itertuples(index=False, name=None)]
+
+        with conn.cursor() as cursor:
+            execute_values(cursor, query, values)
+
+        conn.commit()
+        print(f"Inserção bem-sucedida! {len(values)} registros inseridos.")
+
+    except Exception as e:
+        print(f"Erro ao executar a inserção: {e}")
+        if conn:
+            conn.rollback()
+
+    finally:
+        if conn:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Coleta de dados da API OpenSky
+# ---------------------------------------------------------------------------
+
+def fetch_opensky_data():
+    """Consulta a API da OpenSky Network e retorna o DataFrame normalizado."""
+    url = "https://opensky-network.org/api/states/all"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        print(f"Erro ao acessar API: {response.status_code}")
+        return None
+
     data = response.json()
+    snapshot_time = data["time"]
 
-    columns = [
-        "icao24", "callsign", "origin_country", "time_position", "last_contact",
-        "longitude", "latitude", "baro_altitude", "on_ground", "velocity",
-        "true_track", "vertical_rate", "sensors", "geo_altitude", "squawk",
-        "spi", "position_source"
-    ]
-    
-    time = data['time']
+    # Detectar dinamicamente quantas colunas a API retornou (17 sem auth, 18 com auth)
+    first_state = data["states"][0] if data["states"] else []
+    columns = OPENSKY_COLUMNS_18 if len(first_state) == 18 else OPENSKY_COLUMNS_17
+
     df = pd.DataFrame(data["states"], columns=columns)
 
-    df["category"] = df["category"].map(category_map)
-    df["position_sourcey"] = df["position_source"].map(position_source_map)
-    df["time"] = time
+    # Normalização: mapear códigos numéricos para descrições legíveis
+    if "category" in df.columns:
+        df["category"] = df["category"].map(CATEGORY_MAP)
+    else:
+        df["category"] = None  # coluna ausente na API anônima
 
-    df.to_csv(f"flights_data_{time}.csv", index=False, encoding="utf-8")
-    
-    print("Arquivo 'flights_data.csv' salvo com sucesso!")
+    df["position_source_label"] = df["position_source"].map(POSITION_SOURCE_MAP)
 
-    execute_insert(df)
-else:
-    print(f"Erro ao acessar API: {response.status_code}")
+    # Adicionar o timestamp do snapshot
+    df["time"] = snapshot_time
+
+    return df, snapshot_time
+
+
+# ---------------------------------------------------------------------------
+# Ponto de entrada
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    result = fetch_opensky_data()
+
+    if result is None:
+        exit(1)
+
+    df, snapshot_time = result
+
+    # Salvar backup local em CSV
+    csv_path = f"flights_data_{snapshot_time}.csv"
+    df.to_csv(csv_path, index=False, encoding="utf-8")
+    print(f"Arquivo '{csv_path}' salvo com sucesso!")
+
+    # Persistir no PostgreSQL
+    postgres_insert(df)

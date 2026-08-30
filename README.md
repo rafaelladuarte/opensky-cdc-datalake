@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://opensky-network.org/static/tar1090-map.png" width="700">
+  <img src="tar1090-map.png" width="700">
 </p>
 
 <p align="center">

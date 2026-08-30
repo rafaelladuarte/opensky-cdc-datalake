@@ -6,11 +6,6 @@ Este documento organiza as pendências do projeto em formato de Kanban. As taref
 
 ## 📋 TODO (A Fazer)
 
-### 🐍 [Card 2] Correção do Script de Ingestão e Variáveis de Ambiente
-* **Descrição:** Refatorar o `insert_data_postgres.py`. Ajustar a função de insert para aceitar um DataFrame do Pandas ou a lista retornada pela API. Corrigir a chamada da função que está errada (`execute_insert(df)` vs `postgres_insert(data)`). Configurar e utilizar o `.env` para as credenciais do banco.
-* **Prioridade:** 🔴 Alta (Bloqueante)
-* **Impacto:** 💥 Alto (Garante a entrada dos dados reais no PostgreSQL)
-
 ### 🔌 [Card 3] Ajuste do Conector Source (Debezium/PostgreSQL)
 * **Descrição:** Atualizar o `conector-postgres.json` para escutar o schema e a tabela corretos dos dados da OpenSky (`opensky_api_states_all`), ao invés do schema genérico `inventory` herdado do repositório base.
 * **Prioridade:** 🟡 Média (Depende do Card 2)
@@ -34,7 +29,10 @@ Este documento organiza as pendências do projeto em formato de Kanban. As taref
 ---
 
 ## ✅ DONE (Concluído)
-### 🗄️ [Card 1] Configuração da Infraestrutura Base
+### ✅ [Card 2] Correção do Script de Ingestão e Variáveis de Ambiente
+* **Conclusão:** Script `insert_data_postgres.py` refatorado e funcional. Corrigidos 8 bugs (chamada de função inexistente, incompatibilidade de tipos, coluna ausente, typo, credenciais hardcoded, tabela sem DDL, deps faltando, .env exposto no git). Ambiente virtual criado com `uv`. **13.068 registros de voos inseridos no PostgreSQL com sucesso.**
+
+### ✅ [Card 1] Configuração da Infraestrutura Base
 * **Descrição:** Escrever o `docker-compose.yaml` com os serviços necessários (PostgreSQL, Kafka, Zookeeper, Kafka Connect, Debezium e MinIO).
 * **Conclusão:** `docker-compose.yaml` populado e testado. Contêineres rodando e plugins do Kafka Connect instalados corretamente.
 
