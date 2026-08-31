@@ -30,7 +30,7 @@ services:
 
   connect:
     build:
-      context: .
+      context: ./kafka-connect
       dockerfile: Dockerfile
     container_name: kafka-connect
     ports:

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="tar1090-map.png" width="700">
+  <img src="docs/assets/tar1090-map.png" width="700">
 </p>
 
 <p align="center">
