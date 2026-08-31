@@ -130,6 +130,26 @@ services:
     networks:
       - cdc-network
 
+  app-python:
+    build:
+      context: ./app-python
+    container_name: app-python
+    depends_on:
+      - kafka-broker
+      - minio
+    environment:
+      - KAFKA_BROKER=kafka-broker:29092
+      - KAFKA_TOPIC=opensky.public.opensky_api_states_all
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=datalake
+      - MINIO_PREFIX=silver/opensky/
+      - BATCH_SIZE=1000
+      - BATCH_TIMEOUT_SEC=30
+    networks:
+      - cdc-network
+
 networks:
   cdc-network:
 

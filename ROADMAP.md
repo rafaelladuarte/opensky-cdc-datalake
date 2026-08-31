@@ -5,21 +5,7 @@ Este documento organiza as pendências do projeto em formato de Kanban. As taref
 ---
 
 ## 📋 TODO (A Fazer)
-
-### 🔌 [Card 3] Ajuste do Conector Source (Debezium/PostgreSQL)
-* **Descrição:** Atualizar o `conector-postgres.json` para escutar o schema e a tabela corretos dos dados da OpenSky (`opensky_api_states_all`), ao invés do schema genérico `inventory` herdado do repositório base.
-* **Prioridade:** 🟡 Média (Depende do Card 2)
-* **Impacto:** 💥 Alto (Inicia o streaming dos eventos de mudança)
-
-### 📥 [Card 4] Configuração do Conector Sink (Kafka -> MinIO)
-* **Descrição:** Escrever o `conector-minio.json` (atualmente vazio) para definir como o Kafka Connect irá despejar os eventos dentro do bucket MinIO.
-* **Prioridade:** 🟡 Média (Depende do Card 3)
-* **Impacto:** 🔸 Médio (Estabelece a primeira camada do Data Lake)
-
-### ⚙️ [Card 5] Desenvolvimento do Consumidor Python
-* **Descrição:** Desenvolver o código dos arquivos vazios na pasta `app-python/app/` (`main.py`, `consumer.py`, `processor.py`, `config.py`). Esta aplicação consumirá os tópicos do Kafka, fará processamentos se necessário e salvará em formato final (ex: Parquet) no Data Lake.
-* **Prioridade:** 🟢 Baixa (Pode ser feito por último)
-* **Impacto:** 💥 Alto (Entrega o valor final: dados prontos para análise)
+*(Nenhuma tarefa pendente)*
 
 ---
 
@@ -29,6 +15,17 @@ Este documento organiza as pendências do projeto em formato de Kanban. As taref
 ---
 
 ## ✅ DONE (Concluído)
+
+### ✅ [Card 5] Desenvolvimento do Consumidor Python
+* **Conclusão:** Módulos do consumidor desenvolvidos e integrados com Pandas e Pyarrow para limpar os dados CDC do Debezium e salvá-los no formato otimizado Parquet. O serviço Python foi adicionado ao `docker-compose.yaml`, executando a exportação no MinIO (`silver/opensky/`) através de lotes (batching).
+
+
+### ✅ [Card 4] Configuração do Conector Sink (Kafka -> MinIO)
+* **Conclusão:** Configuração `conector-minio.json` criada e registrada com sucesso. O conector `io.confluent.connect.s3.S3SinkConnector` está ativo consumindo o tópico `opensky.public.opensky_api_states_all` e gravando os arquivos JSON particionados no bucket `datalake` do MinIO.
+
+### ✅ [Card 3] Ajuste do Conector Source (Debezium/PostgreSQL)
+* **Conclusão:** Configuração `conector-postgres.json` finalizada e registrada. O Debezium está monitorando o log do PostgreSQL via slot de replicação e transmitindo as alterações da tabela `opensky_api_states_all` para o Kafka em tempo real.
+
 ### ✅ [Card 2] Correção do Script de Ingestão e Variáveis de Ambiente
 * **Conclusão:** Script `insert_data_postgres.py` refatorado e funcional. Corrigidos 8 bugs (chamada de função inexistente, incompatibilidade de tipos, coluna ausente, typo, credenciais hardcoded, tabela sem DDL, deps faltando, .env exposto no git). Ambiente virtual criado com `uv`. **13.068 registros de voos inseridos no PostgreSQL com sucesso.**
 
