@@ -1,5 +1,11 @@
-from confluent_kafka import Consumer, KafkaError
+import logging
+
+from confluent_kafka import Consumer, Producer
+
 import config
+
+logger = logging.getLogger(__name__)
+
 
 def create_consumer():
     """Cria e configura a instância do consumidor Kafka."""
@@ -10,7 +16,12 @@ def create_consumer():
         'enable.auto.commit': False
     }
 
-    print(f"[{config.KAFKA_GROUP_ID}] Conectando ao Kafka: {config.KAFKA_BROKER}")
+    logger.info("[%s] Conectando ao Kafka: %s", config.KAFKA_GROUP_ID, config.KAFKA_BROKER)
     consumer = Consumer(conf)
     consumer.subscribe([config.KAFKA_TOPIC])
     return consumer
+
+
+def create_producer():
+    """Producer usado para enviar lotes que falharam ao tópico dead-letter."""
+    return Producer({'bootstrap.servers': config.KAFKA_BROKER})

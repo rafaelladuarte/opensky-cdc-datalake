@@ -102,6 +102,7 @@ Clone o repositório e suba os contêineres principais (Kafka, Zookeeper, Postgr
 git clone https://github.com/rafaelladuarte/opensky-cdc-datalake.git
 cd opensky-cdc-datalake
 
+cp .env.example .env   # credenciais locais (não versionadas)
 docker compose up -d --build
 ```
 > Aguarde cerca de 1 minuto para que o cluster Kafka e o Kafka Connect inicializem completamente.
@@ -129,7 +130,11 @@ cd app-ingestion
 pipenv install
 pipenv run python insert_data_postgres.py
 ```
-*(O script buscará >10.000 registros na API e atualizará o PostgreSQL).*
+*(O script roda em loop (`POLL_INTERVAL_SEC`, padrão 60 s), faz UPSERT por `icao24` — gerando eventos de INSERT e UPDATE no CDC — e usa timeout + retry com backoff na API. Configure via `app-ingestion/.env.example`.)*
+
+> **Atenção:** a tabela agora tem `icao24` como chave primária e `squawk`/`category` como `TEXT`. Se já a criou com o DDL antigo, recrie-a: `DROP TABLE opensky_api_states_all;`.
+
+Testes do consumidor: `cd app-python && pip install -r requirements.txt -r requirements-dev.txt && pytest`.
 
 ### 4. Validar os Resultados
 * **Monitorar Mensagens (Kafka UI):** Acesse [http://localhost:8080](http://localhost:8080) e vá até os `Topics`.

@@ -39,11 +39,18 @@ services:
       - kafka-broker
     environment:
       KAFKA_CONNECT_BOOTSTRAP_SERVERS: kafka-broker:29092
+      # Segredos lidos pelos conectores via ${env:VAR} (EnvVarConfigProvider)
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       KAFKA_CONNECT_CONFIGURATION: |
         key.converter=org.apache.kafka.connect.json.JsonConverter
         value.converter=org.apache.kafka.connect.json.JsonConverter
         key.converter.schemas.enable=false
         value.converter.schemas.enable=false
+        config.providers=env
+        config.providers.env.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider
         group.id=connect
         offset.storage.topic=connect-offsets
         offset.storage.replication.factor=1
@@ -62,8 +69,8 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=postgres
     networks:
       - cdc-network
@@ -72,8 +79,8 @@ services:
     container_name: pgadmin
     image: dpage/pgadmin4
     environment:
-      PGADMIN_DEFAULT_EMAIL: lab-pgadmin4@pgadmin.org
-      PGADMIN_DEFAULT_PASSWORD: postgres
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-lab-pgadmin4@pgadmin.org}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-postgres}
     ports:
       - "5433:80"
     depends_on:
@@ -90,8 +97,8 @@ services:
     volumes:
       - minio_storage:/data
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server --console-address ":9001" /data
     networks:
       - cdc-network
@@ -101,9 +108,12 @@ services:
     container_name: mc
     depends_on:
       - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     entrypoint: >
       /bin/sh -c "
-      until (/usr/bin/mc alias set myminio http://minio:9000 admin minioadmin); do sleep 1; done;
+      until (/usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}); do sleep 1; done;
       /usr/bin/mc mb myminio/datalake;
       sleep 3000"
     networks:
@@ -141,12 +151,14 @@ services:
       - KAFKA_BROKER=kafka-broker:29092
       - KAFKA_TOPIC=opensky.public.opensky_api_states_all
       - MINIO_ENDPOINT=http://minio:9000
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-admin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_BUCKET=datalake
       - MINIO_PREFIX=silver/opensky/
       - BATCH_SIZE=1000
       - BATCH_TIMEOUT_SEC=30
+      - MAX_RETRIES=5
+      - DLQ_TOPIC=opensky.dlq
     networks:
       - cdc-network
 

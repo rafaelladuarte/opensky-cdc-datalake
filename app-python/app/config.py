@@ -18,3 +18,10 @@ MINIO_PREFIX = os.getenv("MINIO_PREFIX", "silver/opensky/")
 # Parâmetros de Lote (Batching)
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1000"))
 BATCH_TIMEOUT_SEC = int(os.getenv("BATCH_TIMEOUT_SEC", "30"))
+
+# Tratamento de falhas
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "5"))
+RETRY_BACKOFF_SEC = float(os.getenv("RETRY_BACKOFF_SEC", "5"))
+DLQ_TOPIC = os.getenv("DLQ_TOPIC", "opensky.dlq")
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

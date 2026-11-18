@@ -9,7 +9,7 @@
     "flush.size": "100",
     "storage.class": "io.confluent.connect.s3.storage.S3Storage",
     "format.class": "io.confluent.connect.s3.format.json.JsonFormat",
-    "aws.access.key.id": "admin",
-    "aws.secret.access.key": "minioadmin",
+    "aws.access.key.id": "${env:MINIO_ROOT_USER}",
+    "aws.secret.access.key": "${env:MINIO_ROOT_PASSWORD}",
     "s3.path.style.access": "true"
 }

@@ -1,63 +1,94 @@
+import json
+import logging
 import time
-from consumer import create_consumer
-from processor import extract_payload, process_batch
+
 import config
+from consumer import create_consumer, create_producer
+from processor import extract_payload, process_batch
+
+logging.basicConfig(
+    level=config.LOG_LEVEL,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("opensky-consumer")
+
+
+def send_to_dlq(producer, batch, error):
+    """Envia cada registro do lote ao tópico dead-letter e aguarda a entrega."""
+    for record in batch:
+        producer.produce(
+            config.DLQ_TOPIC,
+            value=json.dumps(record, default=str).encode("utf-8"),
+            headers={"error": str(error)[:500]},
+        )
+    remaining = producer.flush(30)
+    if remaining:
+        raise RuntimeError(f"{remaining} mensagens não entregues ao DLQ")
+
+
+def flush_batch(batch, consumer, producer):
+    """
+    Grava o lote no data lake com número limitado de tentativas.
+    Esgotadas as tentativas, envia ao DLQ. O offset só é commitado depois do
+    upload (ou do DLQ) bem-sucedido -> semântica at-least-once.
+    """
+    last_error = None
+    for attempt in range(1, config.MAX_RETRIES + 1):
+        try:
+            process_batch(batch)
+            consumer.commit()
+            logger.info("Lote salvo no DataLake e offsets commitados.")
+            return
+        except Exception as e:
+            last_error = e
+            logger.warning("Falha ao processar o batch (tentativa %d/%d): %s",
+                           attempt, config.MAX_RETRIES, e)
+            time.sleep(config.RETRY_BACKOFF_SEC * 2 ** (attempt - 1))
+
+    logger.error("Tentativas esgotadas; enviando %d registros ao DLQ '%s'.",
+                 len(batch), config.DLQ_TOPIC)
+    send_to_dlq(producer, batch, last_error)  # se falhar, propaga e não commita
+    consumer.commit()
+
 
 def main():
     consumer = create_consumer()
-    
+    producer = create_producer()
+
     batch = []
     last_batch_time = time.time()
-    
+
     try:
         while True:
-            # Poll espera até 1.0 segundo por mensagens
             msg = consumer.poll(1.0)
-            
+
             if msg is not None:
                 if msg.error():
-                    print(f"Consumer error: {msg.error()}")
+                    logger.error("Consumer error: %s", msg.error())
                     continue
-                
-                # Extrai a entidade do evento CDC
+
                 data = extract_payload(msg.value())
                 if data:
                     batch.append(data)
-            
-            # Condições de flush do batch:
-            # 1. Tamanho do batch atingiu BATCH_SIZE
-            # 2. Timeout de espera atingido e há mensagens no batch
-            time_since_last_batch = time.time() - last_batch_time
+
             size_reached = len(batch) >= config.BATCH_SIZE
-            timeout_reached = time_since_last_batch >= config.BATCH_TIMEOUT_SEC and len(batch) > 0
-            
+            timeout_reached = (time.time() - last_batch_time >= config.BATCH_TIMEOUT_SEC
+                               and len(batch) > 0)
+
             if size_reached or timeout_reached:
                 reason = "SIZE" if size_reached else "TIMEOUT"
-                print(f"Realizando flush (Razão: {reason}) - {len(batch)} mensagens acumuladas.")
-                
-                try:
-                    # Envia para MinIO
-                    process_batch(batch)
-                    
-                    # Comita offsets no Kafka apenas se o upload foi bem-sucedido
-                    consumer.commit()
-                    print("Lote salvo no DataLake e offsets commitados.")
-                except Exception as e:
-                    print(f"Falha ao processar o batch. Tentando novamente mais tarde. Erro: {e}")
-                    # Não limpamos o batch, nem commitamos, para não perder dados. 
-                    # Numa app real, implementaríamos retries ou dead-letter queue.
-                    time.sleep(5) # Backoff simples
-                    continue
-                
-                # Reseta estado do batch
+                logger.info("Realizando flush (Razão: %s) - %d mensagens acumuladas.",
+                            reason, len(batch))
+                flush_batch(batch, consumer, producer)
                 batch = []
                 last_batch_time = time.time()
-                
+
     except KeyboardInterrupt:
-        print("Encerramento solicitado pelo usuário.")
+        logger.info("Encerramento solicitado pelo usuário.")
     finally:
         consumer.close()
 
+
 if __name__ == "__main__":
-    print("Iniciando Consumidor Python OpenSky...")
+    logger.info("Iniciando Consumidor Python OpenSky...")
     main()
